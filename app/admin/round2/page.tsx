@@ -9,7 +9,7 @@ type Team = { id: string; name: string; active: boolean; vote_count: number };
 export default function AdminRound2Page() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTeamName, setNewTeamName] = useState(""); 
+  const [newTeamName, setNewTeamName] = useState("");
 
   const fetchTeams = async () => {
     if (!supabase) return;
@@ -18,7 +18,7 @@ export default function AdminRound2Page() {
     if (teamsData) {
       const teamsWithVotes = await Promise.all(
         teamsData.map(async (t) => {
-          const { count } = await supabase
+          const { count } = await supabase!
             .from("votes")
             .select("*", { count: "exact", head: true })
             .eq("team_id", t.id);
@@ -92,7 +92,7 @@ export default function AdminRound2Page() {
           <p className="mb-4 text-sm text-slate-500">
             Bảng xếp hạng dựa trên số phiếu. Tích chọn "Hoạt động" để đưa đội vào Vòng 2.
           </p>
-          
+
           {loading ? (
             <p className="text-center text-slate-500">Đang tải dữ liệu...</p>
           ) : (
