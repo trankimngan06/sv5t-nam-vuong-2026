@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --ink:#48534e; --pink:#f5b8c8; --mint:#b8dfca; --cream:#fff8ef; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:#fffaf6; color:var(--ink); font-family:'Be Vietnam Pro',system-ui,sans-serif; }
+button,input,select { font:inherit; }
+.page-bg {
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(246,190,205,.55), transparent 28rem),
+    radial-gradient(circle at 94% 18%, rgba(184,223,202,.58), transparent 30rem),
+    linear-gradient(145deg,#fffaf5 0%,#fff3f2 48%,#f0faf3 100%);
+}
+.soft-card { background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.9); border-radius:28px; box-shadow: 12px 14px 34px rgba(179,143,151,.13), -8px -8px 22px rgba(255,255,255,.75); }
+.soft-input { width:100%; border:1px solid #f0dfe0; background:#fffdfb; border-radius:15px; padding:13px 15px; outline:none; color:#48534e; }
+.soft-input:focus { border-color:#df9eaf; box-shadow:0 0 0 3px rgba(223,158,175,.16); }
+.pink-btn { background:linear-gradient(135deg,#f2aabd,#e98fa8); color:#fff; border:0; border-radius:16px; padding:13px 20px; font-weight:700; box-shadow:0 7px 18px rgba(218,139,161,.25); cursor:pointer; }
+.mint-btn { background:linear-gradient(135deg,#b8dfca,#91c9ab); color:#315d49; border:0; border-radius:14px; padding:11px 16px; font-weight:700; cursor:pointer; }
+.pill { display:inline-flex; border-radius:999px; padding:7px 12px; font-size:12px; font-weight:700; background:#fce5eb; color:#a65e75; }
+.muted { color:#89928d; }
