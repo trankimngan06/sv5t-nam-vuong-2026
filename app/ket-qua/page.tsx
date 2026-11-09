@@ -64,7 +64,7 @@ export default function ResultsPage() {
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channel);
+            supabase!.removeChannel(channel);
         };
     }, []);
 
