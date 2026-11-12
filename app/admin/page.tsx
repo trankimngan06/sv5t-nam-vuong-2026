@@ -6,14 +6,18 @@ import * as XLSX from "xlsx";
 import Brand from "@/components/Brand";
 import { supabase, ADMIN_EMAIL } from "@/lib/supabase";
 
-// Đã sửa lại Type cho khớp với Database thật của cậu
 type Round = { id: string; round_number: number; title: string; is_open: boolean };
-type Vote = { voter_name: string; voter_email: string; team_id: string; round_id: string; created_at: string };
+type Vote = { voter_name: string; voter_email: string; team_id: string | null; contestant_id: string | null; round_id: string; created_at: string };
+type Team = { id: string; name: string };
+type Contestant = { id: string; name: string };
 
 export default function AdminPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [contestants, setContestants] = useState<Contestant[]>([]);
+
   const [email, setEmail] = useState(ADMIN_EMAIL);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,13 +31,17 @@ export default function AdminPage() {
 
     if (current !== ADMIN_EMAIL) { setLoading(false); return; }
 
-    const [r, v] = await Promise.all([
+    const [r, v, t, c] = await Promise.all([
       supabase.from("rounds").select("*").order("round_number"),
-      supabase.from("votes").select("*").order("created_at", { ascending: false })
+      supabase.from("votes").select("*").order("created_at", { ascending: false }),
+      supabase.from("teams").select("id, name"),
+      supabase.from("contestants").select("id, name")
     ]);
 
     if (!r.error) setRounds(r.data || []);
     if (!v.error) setVotes(v.data || []);
+    if (!t.error) setTeams(t.data || []);
+    if (!c.error) setContestants(c.data || []);
     setLoading(false);
   }
 
@@ -64,21 +72,46 @@ export default function AdminPage() {
   }
 
   function exportFile(roundNo: number | "all") {
-    const roundObj = rounds.find(r => r.round_number === roundNo);
+    const dataToExport: any[] = [];
 
-    const rows = votes.filter(v => {
-      if (roundNo === "all") return true;
-      return v.round_id === roundObj?.id;
-    }).map((v, i) => ({
-      "STT": i + 1,
-      "Họ và tên": v.voter_name,
-      "Email": v.voter_email,
-      "Thời gian": new Date(v.created_at).toLocaleString("vi-VN")
-    }));
+    const addSectionTitle = (title: string) => {
+      dataToExport.push({ "STT": "", "Họ và tên": `=== ${title} ===` });
+    };
 
-    const sheet = XLSX.utils.json_to_sheet(rows);
-    const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, "Binh chon");
-    XLSX.writeFile(book, roundNo === "all" ? "UHL_Tong_hop_2_vong.xlsx" : `UHL_Binh_chon_vong_${roundNo}.xlsx`);
+    const processRound = (rNum: number) => {
+      const roundObj = rounds.find(r => r.round_number === rNum);
+      if (!roundObj) return;
+      const roundVotes = votes.filter(v => v.round_id === roundObj.id);
+
+      addSectionTitle(roundObj.title || `Vòng ${rNum}`);
+
+      roundVotes.forEach((v, i) => {
+        let selectedName = "";
+        if (v.team_id) selectedName = teams.find(t => t.id === v.team_id)?.name || "Không xác định";
+        else if (v.contestant_id) selectedName = contestants.find(c => c.id === v.contestant_id)?.name || "Không xác định";
+
+        dataToExport.push({
+          "STT": i + 1,
+          "Họ và tên": v.voter_name,
+          "Email": v.voter_email,
+          "Bình chọn cho": selectedName,
+          "Thời gian": new Date(v.created_at).toLocaleString("vi-VN")
+        });
+      });
+      dataToExport.push({});
+    };
+
+    if (roundNo === "all") {
+      const mainRounds = rounds.filter(r => r.round_number <= 3).sort((a, b) => a.round_number - b.round_number);
+      mainRounds.forEach(r => processRound(r.round_number));
+    } else {
+      processRound(roundNo);
+    }
+
+    const sheet = XLSX.utils.json_to_sheet(dataToExport);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Binh chon");
+    XLSX.writeFile(book, roundNo === "all" ? "UHL_Tong_hop.xlsx" : `UHL_Binh_chon_vong_${roundNo}.xlsx`);
   }
 
   if (loading) return <main className="page-bg min-h-screen p-8 text-center">Đang tải trang quản trị...</main>;
@@ -125,46 +158,74 @@ export default function AdminPage() {
 
         {notice && <p className="mt-4 rounded-xl bg-white p-3 text-sm">{notice}</p>}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {/* DANH SÁCH CÁC VÒNG THI */}
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rounds.map(r => {
-            // SỬA LẠI CHỖ NÀY: Đếm theo round_id thay vì round_number
             const count = votes.filter(v => v.round_id === r.id).length;
 
             return (
-              <section key={r.id} className="soft-card p-5">
-                <div className="flex items-center justify-between">
-                  <span className="pill">ROUND 0{r.round_number}</span>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${r.is_open ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                    {r.is_open ? "ĐANG MỞ" : "ĐANG ĐÓNG"}
-                  </span>
+              <section key={r.id} className="soft-card p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="pill">ROUND 0{r.round_number}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${r.is_open ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {r.is_open ? "ĐANG MỞ" : "ĐANG ĐÓNG"}
+                    </span>
+                  </div>
+                  <h2 className="mt-4 text-xl font-bold h-14 overflow-hidden line-clamp-2">{r.title}</h2>
+                  <div className="my-4 text-4xl font-extrabold text-rose-400">
+                    {count}
+                    <span className="ml-2 text-sm font-medium text-slate-400">phiếu</span>
+                  </div>
                 </div>
-                <h2 className="mt-4 text-xl font-bold">{r.title}</h2>
-                <div className="my-4 text-4xl font-extrabold text-rose-400">
-                  {count}
-                  <span className="ml-2 text-sm font-medium text-slate-400">phiếu</span>
+
+                <div>
+                  <button className={r.is_open ? "mint-btn w-full" : "pink-btn w-full"} onClick={() => toggle(r)}>
+                    {r.is_open ? "Đóng vòng bình chọn" : "Mở vòng bình chọn"}
+                  </button>
+                  <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
+                    <QRCodeCanvas value={`${origin}/vote/${r.round_number}`} size={150} includeMargin />
+                  </div>
+                  <p className="mt-2 break-all text-center text-xs text-slate-400">{origin}/vote/{r.round_number}</p>
                 </div>
-                <button className={r.is_open ? "mint-btn w-full" : "pink-btn w-full"} onClick={() => toggle(r)}>
-                  {r.is_open ? "Đóng vòng bình chọn" : "Mở vòng bình chọn"}
-                </button>
-                <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
-                  <QRCodeCanvas value={`${origin}/vote/${r.round_number}`} size={150} includeMargin />
-                </div>
-                <p className="mt-2 break-all text-center text-xs text-slate-400">{origin}/vote/{r.round_number}</p>
-                <button className="mt-3 w-full rounded-xl border border-emerald-200 bg-white p-3 text-sm font-bold text-emerald-700" onClick={() => exportFile(r.round_number)}>
-                  Xuất Excel vòng {r.round_number}
-                </button>
               </section>
             );
           })}
         </div>
 
-        <section className="soft-card mt-5 p-5">
-          <h2 className="text-lg font-bold">Tổng hợp dữ liệu</h2>
-          <div className="mt-4 flex gap-2">
-            <button className="pink-btn" onClick={() => exportFile("all")}>Tải Excel tổng hợp</button>
-            <button className="rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-rose-600" onClick={load}>Làm mới dữ liệu</button>
+        {/* KHU VỰC XUẤT EXCEL (CHIA LƯỚI 2X2) */}
+        <section className="soft-card mt-8 p-6">
+          <h2 className="text-xl font-bold mb-4 text-slate-700">Tải dữ liệu Excel</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rounds.find(r => r.round_number === 1) && (
+              <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile(1)}>
+                Xuất Excel Vòng 1
+              </button>
+            )}
+
+            {rounds.find(r => r.round_number === 2) && (
+              <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile(2)}>
+                Xuất Excel Vòng 2
+              </button>
+            )}
+
+            {rounds.find(r => r.round_number === 3) && (
+              <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile(3)}>
+                Xuất Excel Vòng 3
+              </button>
+            )}
+
+            <button className="w-full rounded-xl bg-rose-400 p-4 text-sm font-bold text-white hover:bg-rose-500 transition-colors shadow-sm" onClick={() => exportFile("all")}>
+              Tải Excel Tổng hợp
+            </button>
           </div>
+
+          <button className="w-full mt-6 rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm font-bold text-slate-600 hover:bg-slate-100" onClick={load}>
+            Làm mới dữ liệu
+          </button>
         </section>
+
       </div>
     </main>
   );
