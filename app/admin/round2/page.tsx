@@ -20,11 +20,11 @@ export default function AdminRound2Page() {
     setLoading(true);
 
     // Tải Teams
-    const { data: teamsData } = await supabase.from("teams").select("id, name, active").order("name");
+    const { data: teamsData } = await supabase!.from("teams").select("id, name, active").order("name");
     if (teamsData) {
       const teamsWithVotes = await Promise.all(
         teamsData.map(async (t) => {
-          const { count } = await supabase.from("votes").select("*", { count: "exact", head: true }).eq("team_id", t.id);
+          const { count } = await supabase!.from("votes").select("*", { count: "exact", head: true }).eq("team_id", t.id);
           return { ...t, vote_count: count || 0 };
         })
       );
@@ -33,7 +33,7 @@ export default function AdminRound2Page() {
     }
 
     // Tải Contestants (Thí sinh vòng 3)
-    const { data: cData } = await supabase.from("contestants").select("id, name").order("name");
+    const { data: cData } = await supabase!.from("contestants").select("id, name").order("name");
     if (cData) setContestants(cData);
 
     setLoading(false);
