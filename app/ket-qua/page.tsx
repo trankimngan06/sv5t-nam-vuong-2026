@@ -74,7 +74,6 @@ export default function ResultsPage() {
             })
             .subscribe();
 
-        // SỬA LỖI TẠI ĐÂY: Thêm dấu ! vào sau supabase
         return () => {
             supabase!.removeChannel(channel);
         };
