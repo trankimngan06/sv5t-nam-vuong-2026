@@ -16,9 +16,9 @@ export default function ResultsPage() {
         if (!supabase) return;
 
         // 1. Tải dữ liệu cho Vòng 1, 2 (Đội thi)
-        const { data: teams } = await supabase.from("teams").select("id, name").eq("active", true);
-        const { data: rounds } = await supabase.from("rounds").select("id, round_number, title").in("round_number", [1, 2]);
-        const { data: votes } = await supabase.from("votes").select("team_id, round_id");
+        const { data: teams } = await supabase!.from("teams").select("id, name").eq("active", true);
+        const { data: rounds } = await supabase!.from("rounds").select("id, round_number, title").in("round_number", [1, 2]);
+        const { data: votes } = await supabase!.from("votes").select("team_id, round_id");
 
         if (rounds && votes && teams) {
             const processedRounds = rounds.map(round => {
@@ -37,8 +37,8 @@ export default function ResultsPage() {
         }
 
         // 2. Tải dữ liệu cho Giải phụ (Thí sinh cá nhân)
-        const { data: contestants } = await supabase.from("contestants").select("id, name");
-        const { data: specialVotes } = await supabase.from("special_votes").select("category, contestant_id");
+        const { data: contestants } = await supabase!.from("contestants").select("id, name");
+        const { data: specialVotes } = await supabase!.from("special_votes").select("category, contestant_id");
 
         if (contestants && specialVotes) {
             const categories = ["trinh_dien", "trang_phuc", "guong_mat"];
@@ -65,11 +65,11 @@ export default function ResultsPage() {
     useEffect(() => {
         fetchData();
         if (!supabase) return;
-        const channel = supabase.channel("realtime-votes")
+        const channel = supabase!.channel("realtime-votes")
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => { fetchData(); })
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "special_votes" }, () => { fetchData(); })
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
+        return () => { supabase!.removeChannel(channel); };
     }, []);
 
     // Render khối cho Vòng 1, 2 (Dạng dọc)
