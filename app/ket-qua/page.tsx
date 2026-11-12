@@ -15,7 +15,6 @@ export default function ResultsPage() {
     const fetchData = async () => {
         if (!supabase) return;
 
-        // 1. Tải dữ liệu cho Vòng 1, 2 (Đội thi)
         const { data: teams } = await supabase.from("teams").select("id, name").eq("active", true);
         const { data: rounds } = await supabase.from("rounds").select("id, round_number, title").in("round_number", [1, 2]);
         const { data: votes } = await supabase.from("votes").select("team_id, round_id");
@@ -36,7 +35,6 @@ export default function ResultsPage() {
             setMainRounds(processedRounds);
         }
 
-        // 2. Tải dữ liệu cho Giải phụ (Thí sinh cá nhân)
         const { data: contestants } = await supabase.from("contestants").select("id, name");
         const { data: specialVotes } = await supabase.from("special_votes").select("category, contestant_id");
 
@@ -66,7 +64,6 @@ export default function ResultsPage() {
         fetchData();
         if (!supabase) return;
 
-        // Lắng nghe sự kiện realtime
         const channel = supabase
             .channel("realtime-votes")
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => {
@@ -77,12 +74,12 @@ export default function ResultsPage() {
             })
             .subscribe();
 
+        // SỬA LỖI TẠI ĐÂY: Thêm dấu ! vào sau supabase
         return () => {
-            supabase.removeChannel(channel);
+            supabase!.removeChannel(channel);
         };
     }, []);
 
-    // Render khối cho Vòng 1, 2 (Dạng dọc)
     const renderMainRound = (title: string, results: ResultItem[], total: number) => (
         <div className="flex-1 bg-white/60 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-white">
             <div className="flex items-center justify-between mb-6">
@@ -111,7 +108,6 @@ export default function ResultsPage() {
         </div>
     );
 
-    // Render khối cho Giải phụ (Dạng dọc)
     const renderSpecialAward = (title: string, icon: string, results: ResultItem[]) => (
         <div className="flex-1 bg-white/60 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-white">
             <div className="flex items-center justify-between mb-6">
@@ -156,8 +152,6 @@ export default function ResultsPage() {
                     <p className="text-center text-slate-500 text-lg">Đang tải dữ liệu...</p>
                 ) : (
                     <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-
-                        {/* HÀNG TRÊN: VÒNG 1 & VÒNG 2 */}
                         <div className="flex flex-col lg:flex-row gap-6">
                             {mainRounds.map((round) => (
                                 <div key={round.round_number} className="flex-1">
@@ -166,7 +160,6 @@ export default function ResultsPage() {
                             ))}
                         </div>
 
-                        {/* HÀNG DƯỚI: 3 GIẢI PHỤ */}
                         <div>
                             <h2 className="text-2xl font-extrabold text-slate-800 uppercase text-center mb-6 mt-10">Bảng xếp hạng Giải phụ</h2>
                             <div className="flex flex-col lg:flex-row gap-6">
@@ -175,7 +168,6 @@ export default function ResultsPage() {
                                 {renderSpecialAward("Gương mặt yêu thích", "✨", specialAwards["guong_mat"] || [])}
                             </div>
                         </div>
-
                     </div>
                 )}
 
