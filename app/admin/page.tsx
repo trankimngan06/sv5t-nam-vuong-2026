@@ -10,6 +10,7 @@ type Round = { id: string; round_number: number; title: string; is_open: boolean
 type Vote = { voter_name: string; voter_email: string; team_id: string | null; contestant_id: string | null; round_id: string; created_at: string };
 type Team = { id: string; name: string };
 type Contestant = { id: string; name: string };
+type SpecialVote = { voter_email: string; category: string; contestant_id: string; created_at: string };
 
 export default function AdminPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export default function AdminPage() {
   const [votes, setVotes] = useState<Vote[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [contestants, setContestants] = useState<Contestant[]>([]);
+  const [specialVotes, setSpecialVotes] = useState<SpecialVote[]>([]);
   const [specialVotesCount, setSpecialVotesCount] = useState(0);
 
   const [email, setEmail] = useState(ADMIN_EMAIL);
@@ -32,21 +34,24 @@ export default function AdminPage() {
 
     if (current !== ADMIN_EMAIL) { setLoading(false); return; }
 
-    const [r, v, t, c] = await Promise.all([
+    const [r, v, t, c, sp] = await Promise.all([
       supabase.from("rounds").select("*").order("round_number"),
       supabase.from("votes").select("*").order("created_at", { ascending: false }),
       supabase.from("teams").select("id, name"),
-      supabase.from("contestants").select("id, name")
+      supabase.from("contestants").select("id, name"),
+      supabase.from("special_votes").select("*").order("created_at", { ascending: false })
     ]);
 
     if (!r.error) setRounds(r.data || []);
     if (!v.error) setVotes(v.data || []);
     if (!t.error) setTeams(t.data || []);
     if (!c.error) setContestants(c.data || []);
+    if (!sp.error) setSpecialVotes(sp.data || []);
 
-    // Lấy số lượng phiếu Giải phụ
-    const { count: spCount } = await supabase.from("special_votes").select("*", { count: "exact", head: true });
-    if (spCount !== null) setSpecialVotesCount(spCount);
+    if (sp.data) {
+      const uniqueEmails = new Set(sp.data.map(item => item.voter_email));
+      setSpecialVotesCount(uniqueEmails.size);
+    }
 
     setLoading(false);
   }
@@ -56,15 +61,10 @@ export default function AdminPage() {
     load();
     if (!supabase) return;
 
-    // Lắng nghe sự kiện realtime cho cả votes và special_votes
     const channel = supabase
       .channel("realtime-admin")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => {
-        load();
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "special_votes" }, () => {
-        load();
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => { load(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "special_votes" }, () => { load(); })
       .subscribe();
 
     return () => { supabase!.removeChannel(channel); };
@@ -91,7 +91,7 @@ export default function AdminPage() {
     await load();
   }
 
-  function exportFile(roundNo: number | "all") {
+  function exportFile(roundNo: number | "all" | "special") {
     const dataToExport: any[] = [];
 
     const addSectionTitle = (title: string) => {
@@ -121,9 +121,56 @@ export default function AdminPage() {
       dataToExport.push({});
     };
 
+    const processSpecialAwards = () => {
+      addSectionTitle("GIẢI PHỤ");
+
+      // Tạo danh sách email -> tên từ bảng votes (để tra cứu tên)
+      const emailToNameMap = new Map();
+      votes.forEach(v => {
+        if (v.voter_email && v.voter_name) {
+          emailToNameMap.set(v.voter_email, v.voter_name);
+        }
+      });
+
+      const groupedByEmail = specialVotes.reduce((acc, vote) => {
+        if (!acc[vote.voter_email]) acc[vote.voter_email] = [];
+        acc[vote.voter_email].push(vote);
+        return acc;
+      }, {} as Record<string, SpecialVote[]>);
+
+      Object.entries(groupedByEmail).forEach(([email, votes], i) => {
+        let trinhDien = "Chưa chọn";
+        let trangPhuc = "Chưa chọn";
+        let guongMat = "Chưa chọn";
+
+        votes.forEach(v => {
+          const name = contestants.find(c => c.id === v.contestant_id)?.name || "Không xác định";
+          if (v.category === "trinh_dien") trinhDien = name;
+          if (v.category === "trang_phuc") trangPhuc = name;
+          if (v.category === "guong_mat") guongMat = name;
+        });
+
+        const voterName = emailToNameMap.get(email) || "Không rõ";
+
+        dataToExport.push({
+          "STT": i + 1,
+          "Họ và tên": voterName,
+          "Email": email,
+          "Trình diễn": trinhDien,
+          "Trang phục": trangPhuc,
+          "Gương mặt": guongMat,
+          "Thời gian": new Date(votes[0].created_at).toLocaleString("vi-VN")
+        });
+      });
+      dataToExport.push({});
+    };
+
     if (roundNo === "all") {
       const mainRounds = rounds.filter(r => r.round_number <= 3).sort((a, b) => a.round_number - b.round_number);
       mainRounds.forEach(r => processRound(r.round_number));
+      processSpecialAwards(); // Gộp cả Giải phụ vào file Tổng hợp
+    } else if (roundNo === "special") {
+      processSpecialAwards();
     } else {
       processRound(roundNo);
     }
@@ -131,7 +178,12 @@ export default function AdminPage() {
     const sheet = XLSX.utils.json_to_sheet(dataToExport);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, "Binh chon");
-    XLSX.writeFile(book, roundNo === "all" ? "UHL_Tong_hop.xlsx" : `UHL_Binh_chon_vong_${roundNo}.xlsx`);
+
+    let fileName = "UHL_Tong_hop.xlsx";
+    if (roundNo === "special") fileName = "UHL_Giai_phu.xlsx";
+    else if (roundNo !== "all") fileName = `UHL_Binh_chon_vong_${roundNo}.xlsx`;
+
+    XLSX.writeFile(book, fileName);
   }
 
   if (loading) return <main className="page-bg min-h-screen p-8 text-center">Đang tải trang quản trị...</main>;
@@ -168,7 +220,6 @@ export default function AdminPage() {
           <p className="mt-1 text-sm text-slate-500">Đăng nhập: {sessionEmail}</p>
         </div>
 
-        {/* Nút điều hướng nhanh */}
         <div className="mt-4 flex flex-wrap gap-2">
           <a href="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-800">
             🏠 Trang chủ
@@ -195,7 +246,6 @@ export default function AdminPage() {
 
         {notice && <p className="mt-4 rounded-xl bg-white p-3 text-sm">{notice}</p>}
 
-        {/* DANH SÁCH CÁC VÒNG THI VÀ GIẢI PHỤ */}
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rounds.map(r => {
             const count = votes.filter(v => v.round_id === r.id).length;
@@ -230,24 +280,23 @@ export default function AdminPage() {
             );
           })}
 
-          {/* Ô GIẢI PHỤ CỐ ĐỊNH */}
           <section className="soft-card p-5 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="pill bg-purple-100 text-purple-700">SPECIAL AWARDS</span>
-                <span className="rounded-full px-3 py-1 text-xs font-bold bg-purple-100 text-purple-700">
+                <span className="pill bg-emerald-100 text-emerald-700">SPECIAL AWARDS</span>
+                <span className="rounded-full px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-700">
                   ĐANG MỞ
                 </span>
               </div>
               <h2 className="mt-4 text-xl font-bold h-14 overflow-hidden line-clamp-2">Bình chọn Giải phụ</h2>
-              <div className="my-4 text-4xl font-extrabold text-purple-600">
+              <div className="my-4 text-4xl font-extrabold text-rose-400">
                 {specialVotesCount}
                 <span className="ml-2 text-sm font-medium text-slate-400">phiếu</span>
               </div>
             </div>
 
             <div>
-              <a href="/vote/giai-phu" target="_blank" className="block w-full rounded-xl bg-purple-400 p-3 text-center text-sm font-bold text-white hover:bg-purple-500 transition-colors">
+              <a href="/vote/giai-phu" target="_blank" className="block w-full rounded-xl bg-emerald-400 p-3 text-center text-sm font-bold text-white hover:bg-emerald-500 transition-colors">
                 Mở trang Vote Giải phụ
               </a>
               <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
@@ -258,7 +307,6 @@ export default function AdminPage() {
           </section>
         </div>
 
-        {/* KHU VỰC XUẤT EXCEL */}
         <section className="soft-card mt-8 p-6">
           <h2 className="text-xl font-bold mb-4 text-slate-700">Tải dữ liệu Excel</h2>
 
@@ -274,6 +322,10 @@ export default function AdminPage() {
                 Xuất Excel Vòng 2
               </button>
             )}
+
+            <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile("special")}>
+              Xuất Excel Giải phụ
+            </button>
 
             <button className="w-full rounded-xl bg-rose-400 p-4 text-sm font-bold text-white hover:bg-rose-500 transition-colors shadow-sm" onClick={() => exportFile("all")}>
               Tải Excel Tổng hợp
