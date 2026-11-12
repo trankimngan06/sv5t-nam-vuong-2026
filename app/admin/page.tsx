@@ -17,6 +17,7 @@ export default function AdminPage() {
   const [votes, setVotes] = useState<Vote[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [contestants, setContestants] = useState<Contestant[]>([]);
+  const [specialVotesCount, setSpecialVotesCount] = useState(0);
 
   const [email, setEmail] = useState(ADMIN_EMAIL);
   const [notice, setNotice] = useState("");
@@ -29,7 +30,6 @@ export default function AdminPage() {
     const current = session?.user.email?.toLowerCase() || null;
     setSessionEmail(current);
 
-    // CHỈ ADMIN_EMAIL mới được load dữ liệu
     if (current !== ADMIN_EMAIL) { setLoading(false); return; }
 
     const [r, v, t, c] = await Promise.all([
@@ -43,12 +43,31 @@ export default function AdminPage() {
     if (!v.error) setVotes(v.data || []);
     if (!t.error) setTeams(t.data || []);
     if (!c.error) setContestants(c.data || []);
+
+    // Lấy số lượng phiếu Giải phụ
+    const { count: spCount } = await supabase.from("special_votes").select("*", { count: "exact", head: true });
+    if (spCount !== null) setSpecialVotesCount(spCount);
+
     setLoading(false);
   }
 
   useEffect(() => {
     setOrigin(window.location.origin);
     load();
+    if (!supabase) return;
+
+    // Lắng nghe sự kiện realtime cho cả votes và special_votes
+    const channel = supabase
+      .channel("realtime-admin")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => {
+        load();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "special_votes" }, () => {
+        load();
+      })
+      .subscribe();
+
+    return () => { supabase!.removeChannel(channel); };
   }, []);
 
   async function login(e: React.FormEvent) {
@@ -149,7 +168,7 @@ export default function AdminPage() {
           <p className="mt-1 text-sm text-slate-500">Đăng nhập: {sessionEmail}</p>
         </div>
 
-        {/* Nút điều hướng nhanh (Đã thêm đủ 4 nút) */}
+        {/* Nút điều hướng nhanh */}
         <div className="mt-4 flex flex-wrap gap-2">
           <a href="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-800">
             🏠 Trang chủ
@@ -176,11 +195,11 @@ export default function AdminPage() {
 
         {notice && <p className="mt-4 rounded-xl bg-white p-3 text-sm">{notice}</p>}
 
-        {/* DANH SÁCH CÁC VÒNG THI */}
+        {/* DANH SÁCH CÁC VÒNG THI VÀ GIẢI PHỤ */}
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rounds.map(r => {
             const count = votes.filter(v => v.round_id === r.id).length;
-            const voteUrl = r.round_number === 3 ? `${origin}/vote/giai-phu` : `${origin}/vote/${r.round_number}`;
+            const voteUrl = `${origin}/vote/${r.round_number}`;
 
             return (
               <section key={r.id} className="soft-card p-5 flex flex-col justify-between">
@@ -210,6 +229,33 @@ export default function AdminPage() {
               </section>
             );
           })}
+
+          {/* Ô GIẢI PHỤ CỐ ĐỊNH */}
+          <section className="soft-card p-5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="pill bg-purple-100 text-purple-700">SPECIAL AWARDS</span>
+                <span className="rounded-full px-3 py-1 text-xs font-bold bg-purple-100 text-purple-700">
+                  ĐANG MỞ
+                </span>
+              </div>
+              <h2 className="mt-4 text-xl font-bold h-14 overflow-hidden line-clamp-2">Bình chọn Giải phụ</h2>
+              <div className="my-4 text-4xl font-extrabold text-purple-600">
+                {specialVotesCount}
+                <span className="ml-2 text-sm font-medium text-slate-400">phiếu</span>
+              </div>
+            </div>
+
+            <div>
+              <a href="/vote/giai-phu" target="_blank" className="block w-full rounded-xl bg-purple-400 p-3 text-center text-sm font-bold text-white hover:bg-purple-500 transition-colors">
+                Mở trang Vote Giải phụ
+              </a>
+              <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
+                <QRCodeCanvas value={`${origin}/vote/giai-phu`} size={150} includeMargin />
+              </div>
+              <p className="mt-2 break-all text-center text-xs text-slate-400">{origin}/vote/giai-phu</p>
+            </div>
+          </section>
         </div>
 
         {/* KHU VỰC XUẤT EXCEL */}
@@ -226,12 +272,6 @@ export default function AdminPage() {
             {rounds.find(r => r.round_number === 2) && (
               <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile(2)}>
                 Xuất Excel Vòng 2
-              </button>
-            )}
-
-            {rounds.find(r => r.round_number === 3) && (
-              <button className="w-full rounded-xl border border-emerald-200 bg-white p-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm" onClick={() => exportFile(3)}>
-                Xuất Excel Vòng 3
               </button>
             )}
 
