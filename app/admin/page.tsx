@@ -29,6 +29,7 @@ export default function AdminPage() {
     const current = session?.user.email?.toLowerCase() || null;
     setSessionEmail(current);
 
+    // CHỈ ADMIN_EMAIL mới được load dữ liệu
     if (current !== ADMIN_EMAIL) { setLoading(false); return; }
 
     const [r, v, t, c] = await Promise.all([
@@ -123,6 +124,7 @@ export default function AdminPage() {
         <section className="soft-card mt-8 p-7">
           <span className="pill">ADMIN ONLY</span>
           <h1 className="mt-4 text-2xl font-extrabold">Đăng nhập Ban Tổ chức</h1>
+          <p className="mt-2 text-sm text-slate-500">Hệ thống chỉ cho phép email quản trị truy cập.</p>
           <form onSubmit={login} className="mt-6 space-y-4">
             <input className="soft-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
             <button className="pink-btn w-full">Gửi link đăng nhập</button>
@@ -147,6 +149,22 @@ export default function AdminPage() {
           <p className="mt-1 text-sm text-slate-500">Đăng nhập: {sessionEmail}</p>
         </div>
 
+        {/* Nút điều hướng nhanh (Đã thêm đủ 4 nút) */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-800">
+            🏠 Trang chủ
+          </a>
+          <a href="/vote/1" target="_blank" className="rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-bold text-rose-500 transition-all hover:bg-rose-50 hover:text-rose-600">
+            🗳️ Vote Vòng 1
+          </a>
+          <a href="/vote/2" target="_blank" className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-600 transition-all hover:bg-emerald-50 hover:text-emerald-700">
+            🗳️ Vote Vòng 2
+          </a>
+          <a href="/vote/giai-phu" target="_blank" className="rounded-xl border border-purple-300 bg-white px-3 py-2 text-xs font-bold text-purple-600 transition-all hover:bg-purple-50 hover:text-purple-700">
+            🌻 Vote Giải phụ
+          </a>
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-3">
           <a href="/admin/round2" className="flex-1 rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-bold text-white transition-all hover:bg-emerald-600 hover:shadow-lg">
             ⚙️ Quản lý Top 5 vào Vòng 2
@@ -162,6 +180,7 @@ export default function AdminPage() {
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rounds.map(r => {
             const count = votes.filter(v => v.round_id === r.id).length;
+            const voteUrl = r.round_number === 3 ? `${origin}/vote/giai-phu` : `${origin}/vote/${r.round_number}`;
 
             return (
               <section key={r.id} className="soft-card p-5 flex flex-col justify-between">
@@ -184,16 +203,16 @@ export default function AdminPage() {
                     {r.is_open ? "Đóng vòng bình chọn" : "Mở vòng bình chọn"}
                   </button>
                   <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
-                    <QRCodeCanvas value={`${origin}/vote/${r.round_number}`} size={150} includeMargin />
+                    <QRCodeCanvas value={voteUrl} size={150} includeMargin />
                   </div>
-                  <p className="mt-2 break-all text-center text-xs text-slate-400">{origin}/vote/{r.round_number}</p>
+                  <p className="mt-2 break-all text-center text-xs text-slate-400">{voteUrl}</p>
                 </div>
               </section>
             );
           })}
         </div>
 
-        {/* KHU VỰC XUẤT EXCEL (CHIA LƯỚI 2X2) */}
+        {/* KHU VỰC XUẤT EXCEL */}
         <section className="soft-card mt-8 p-6">
           <h2 className="text-xl font-bold mb-4 text-slate-700">Tải dữ liệu Excel</h2>
 
@@ -225,7 +244,6 @@ export default function AdminPage() {
             Làm mới dữ liệu
           </button>
         </section>
-
       </div>
     </main>
   );
