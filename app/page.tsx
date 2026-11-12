@@ -9,8 +9,12 @@ export default function Home() {
         <div>
           <span className="pill">THE PEOPLE&apos;S CHOICE</span>
           <h1 className="mt-5 text-4xl font-extrabold leading-tight text-slate-700 md:text-5xl">NAM VƯƠNG<br /><span className="text-rose-400">SINH VIÊN 5 TỐT</span></h1>
-          <p className="mt-4 text-lg font-semibold text-emerald-700">UHL 2026</p>
-          <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">Mỗi lá phiếu là một lời cổ vũ. Hãy cùng CLB Sinh viên 5 Tốt UHL tìm ra gương mặt được yêu thích nhất!</p>
+
+          {/* Chữ UHL 2026 đã được sửa lại kích thước và xóa phần bị lặp */}
+          <div className="mt-4 text-3xl md:text-4xl font-extrabold text-emerald-700 tracking-wide">
+            UHL 2026
+          </div>
+
           <div className="mt-7 flex flex-wrap gap-3">
             <Link className="pink-btn" href="/vote/1">Bình chọn vòng 1</Link>
             <Link className="mint-btn" href="/vote/2">Bình chọn vòng 2</Link>
